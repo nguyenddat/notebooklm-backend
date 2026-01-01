@@ -65,7 +65,8 @@ def create_notebook(
             source = existed_source
         else:
             unique_filename = str(uuid.uuid4())
-            file_path = os.path.join(config.static_dir, unique_filename)
+            file_extension = os.path.splitext(file.filename)[1]
+            file_path = os.path.join(config.static_dir, unique_filename + file_extension)
 
             with open(file_path, "wb") as f:
                 f.write(file.file.read())

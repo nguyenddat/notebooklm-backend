@@ -7,7 +7,7 @@ services:
     env_file:
       - ./mount-data/database/.env
     ports:
-      - "5432:5432"
+      - "4000:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -35,21 +35,21 @@ services:
     networks:
       - fast_api
 
-  redis:
-    image: redis:7-alpine
-    container_name: notebook_redis
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - ./mount-data/redis:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - fast_api
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: notebook_redis
+  #   command: ["redis-server", "--appendonly", "yes"]
+  #   volumes:
+  #     - ./mount-data/redis:/data
+  #   ports:
+  #     - "6379:6379"
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - fast_api
 
   # backend:
   #   container_name: notebook_backend

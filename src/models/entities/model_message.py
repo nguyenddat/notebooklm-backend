@@ -17,6 +17,3 @@ class Message(BareBaseModel):
     
     # Message - Conversation
     notebook = relationship("Notebook", back_populates="message")
-    
-    
-    

@@ -3,7 +3,7 @@ import tempfile
 
 from fastapi import APIRouter, File, Depends, UploadFile
 
-from services import contextual_retrieval_service
+from services import contextual_retrieval_service, retrieve_service
 
 router = APIRouter()
 
@@ -21,3 +21,17 @@ async def contextual_retrieval(
     md_text = contextual_retrieval_service.document_to_md(file_path=tmp_path)
     retriever = contextual_retrieval_service.build_faiss_index(md_text)
     return contextual_retrieval_service.query_relevant_documents(user_query, retriever, 5, 3)
+
+from pydantic import BaseModel
+
+class RetrieveRequest(BaseModel):
+    user_query: str
+    docs_ids: list[int] | None = None
+
+@router.post("")
+async def normal_retrieve(
+    request: RetrieveRequest,
+):
+    documents = retrieve_service.retrieve(request.user_query, top_k=5, doc_ids=request.docs_ids)
+    return documents
+    

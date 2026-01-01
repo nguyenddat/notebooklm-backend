@@ -20,12 +20,13 @@ class RetrieveService:
         result = self.converter.convert(file_path)
         pages = []
 
-        for page_number, page in result.document.pages.items():
+        doc = result.document
+        for page_no, page in doc.pages.items():
+            page_md = doc.export_to_markdown(page_no=page_no)
             pages.append({
-                "page": page_number,
-                "markdown": page.to_markdown(),
+                "page": page_no,
+                "markdown": page_md,
             })
-
         return pages
     
     def markdown_to_documents(self, pages):
@@ -71,7 +72,9 @@ class RetrieveService:
             query_embedding=query_embedding,
             top_k=top_k,
             doc_ids=doc_ids,
-            notebook_id=notebook_id,
         )
+
+    def delete_source(self, source_id: int, notebook_id: Optional[int] = None):
+        qdrant_service.delete_chunks(source_id, notebook_id)
 
 retrieve_service = RetrieveService(chunk_size=2000, chunk_overlap=200)

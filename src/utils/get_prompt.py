@@ -9,7 +9,7 @@ def get_prompt_by_task(task: str):
         parser = summarize_history_parser.parser
     
     elif task == "notebook_chat":
-        prompt_template = notebook_chat_prompt.propmt
+        prompt_template = notebook_chat_prompt.prompt
         parser = notebook_chat_parser.parser
     
     else:

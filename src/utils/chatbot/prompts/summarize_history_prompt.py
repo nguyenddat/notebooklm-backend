@@ -14,7 +14,7 @@ Rules:
 The summary should be clear, neutral, and compact.
 
 Summarize the following conversation:
-{{conversation_history}}
+{conversation_history}
 
 RETURN IN THE FOLLOWING FORMAT:
 """

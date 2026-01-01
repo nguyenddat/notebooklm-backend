@@ -32,13 +32,13 @@ If multiple documents are used, synthesize them into a single coherent answer.
 If documents contain conflicting information, mention this clearly in the response.
 
 Conversation history:
-{{conversation_history}}
+{conversation_history}
 
 Retrieved documents:
-{{retrieved_documents}}
+{retrieved_documents}
 
 User question:
-{{user_question}}
+{question}
 
 Format your output EXACTLY as a JSON object that conforms to the schema.
 """

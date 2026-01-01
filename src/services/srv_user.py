@@ -76,7 +76,6 @@ class UserService:
 
     @staticmethod
     def hash_password(password: str) -> str:
-        print(password)
         return pwd_context.hash(password)
     
     @staticmethod

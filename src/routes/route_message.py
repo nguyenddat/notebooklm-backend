@@ -18,7 +18,7 @@ def get_notebook_history(notebook_id: int, db: Session = Depends(get_db), curren
 from pydantic import BaseModel
 
 class DocumentRetrieved(BaseModel):
-    chunk_id: int
+    chunk_id: str
     score: float
     text: str
     doc_id: int
@@ -58,7 +58,7 @@ def post_notebook_message(
 
     ai_message = Message(
         notebook_id=notebook_id,
-        role=MessageRole.AI,
+        role=MessageRole.ASSISTANT,
         content=json.dumps(ai_response)
     )
     message_service.add(ai_message, db)

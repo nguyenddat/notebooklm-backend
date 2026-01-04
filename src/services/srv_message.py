@@ -47,11 +47,7 @@ class MessageService(BaseService[Message]):
             return ""
         
         # Gọi llm để tóm tắt
-        params = {
-            "question": "",
-            "conversation_history": formatted_messages,
-        }
-
+        params = {"question": "", "conversation_history": formatted_messages,}
         result = LLMService.get_chat_completion("summarize_history", params)
         return result["response"]
 

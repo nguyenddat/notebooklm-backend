@@ -1,7 +1,9 @@
 from langchain_core.prompts import ChatPromptTemplate
 
-from utils.chatbot.parsers import summarize_history_parser, notebook_chat_parser
-from utils.chatbot.prompts import summarize_history_prompt, notebook_chat_prompt
+from utils.chatbot.parsers import summarize_history_parser, notebook_chat_parser, \
+    image_captioning_parser
+from utils.chatbot.prompts import summarize_history_prompt, notebook_chat_prompt, \
+    image_captioning_prompt
 
 def get_prompt_by_task(task: str):
     if task == "summarize_history":
@@ -12,14 +14,20 @@ def get_prompt_by_task(task: str):
         prompt_template = notebook_chat_prompt.prompt
         parser = notebook_chat_parser.parser
     
+    elif task == "image_captioning":
+        prompt_template = image_captioning_prompt.prompt
+        parser = image_captioning_parser.parser
+    
     else:
         raise ValueError(f"Unknown task: {task}")
     
-    prompt_template = ChatPromptTemplate.from_messages(
-        [
-            ("system", prompt_template + """{format_instructions}"""),
-            ("human", "{question}"),
-        ]
-    ).partial(format_instructions=parser.get_format_instructions())
 
-    return prompt_template, parser
+    # Messages
+    system_message = ChatPromptTemplate.from_messages(
+        [
+            ("system", prompt_template + "\n{format_instructions}"),
+        ]
+    ).partial(
+        format_instructions=parser.get_format_instructions() if parser else ""
+    )
+    return system_message, parser

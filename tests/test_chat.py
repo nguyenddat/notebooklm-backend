@@ -73,7 +73,7 @@ def run_test():
     print_step("4. Get History & Retrieve Documents (Concurrent)")
     get_history_url = API_URL + f"notebook/{notebook_id}/history"
     retrieve_url = API_URL + "retrieve"
-    user_query = "quy trình phát triển phần mềm Agile được áp dụng trong dự án" 
+    user_query = input() 
     
     retrieve_body = {
         "user_query": user_query,

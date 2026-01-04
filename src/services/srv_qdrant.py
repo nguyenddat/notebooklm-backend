@@ -38,7 +38,7 @@ class QdrantService:
             ),
         )
 
-        # Index để filter doc_id (NotebookLM-style)
+        # Index để filter doc_id
         self.client.create_payload_index(
             collection_name=self.collection_name,
             field_name="doc_id",

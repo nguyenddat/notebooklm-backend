@@ -4,3 +4,4 @@ docker/
 docker-compose.yml
 Dockerfile
 mount-data/
+notebooks/

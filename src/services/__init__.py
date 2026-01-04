@@ -6,3 +6,4 @@ from .srv_source import source_service
 from .srv_retrieve import retrieve_service
 from .srv_notebook_source import notebook_source_service
 from .srv_message import message_service
+from .srv_llm import llm_service

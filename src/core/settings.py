@@ -28,6 +28,7 @@ class Config(BaseSettings):
     
     # openai
     openai_api_key: str = os.getenv('OPENAI_API_KEY', '')
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     
 config = Config()
 os.makedirs(config.artifact_dir, exist_ok=True)

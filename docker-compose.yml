@@ -2,15 +2,15 @@ services:
   db:
     container_name: notebook_db
     image: postgres:15-alpine
-    volumes:
-      - ./mount-data/database/data:/var/lib/postgresql/data
     env_file:
       - ./mount-data/database/.env
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -26,55 +26,18 @@ services:
       - "6333:6333"
       - "6334:6334"
     volumes:
-      - ./mount-data/qdrant:/qdrant/storage
+      - qdrant_data:/qdrant/storage
     healthcheck:
-      test: [ "CMD", "wget", "-qO-", "http://localhost:6333/collections" ]
+      test: ["CMD", "wget", "-qO-", "http://localhost:6333/collections"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - fast_api
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: notebook_redis
-  #   command: ["redis-server", "--appendonly", "yes"]
-  #   volumes:
-  #     - ./mount-data/redis:/data
-  #   ports:
-  #     - "6379:6379"
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #   networks:
-  #     - fast_api
-
-  # backend:
-  #   container_name: notebook_backend
-  #   build:
-  #     context: ./app
-  #   env_file:
-  #     - ./app/.env
-  #   volumes:
-  #     - ./app:/app
-  #   ports:
-  #     - "8000:8000"
-  #   restart: always
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #     qdrant:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-  #   networks:
-  #     - fast_api
 
 volumes:
   postgres_data:
-
+  qdrant_data:
 
 networks:
   fast_api:

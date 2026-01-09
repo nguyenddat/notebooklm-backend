@@ -1,6 +1,5 @@
 from pix2tex.cli import LatexOCR
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from core import config
 

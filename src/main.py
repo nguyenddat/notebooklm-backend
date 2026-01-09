@@ -1,3 +1,10 @@
+import os
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning)
+os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
+
+
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 

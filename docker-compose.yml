@@ -30,22 +30,22 @@ services:
     networks:
       - fast_api
   
-  backend:
-    build:
-      context: ./src
-      dockerfile: Dockerfile
-    container_name: notebook_backend
-    env_file:
-      - ./src/.env
-    ports:
-      - "4000:4000"
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "4000", "--reload"]
-    networks:
-      - fast_api
+  # backend:
+  #   build:
+  #     context: ./src
+  #     dockerfile: Dockerfile
+  #   container_name: notebook_backend
+  #   env_file:
+  #     - ./src/.env
+  #   ports:
+  #     - "4000:4000"
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "4000", "--reload"]
+  #   networks:
+  #     - fast_api
 
 volumes:
   postgres_data:

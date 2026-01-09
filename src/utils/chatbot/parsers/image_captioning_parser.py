@@ -12,6 +12,4 @@ class ImageCaptionResponse(BaseModel):
     )
 
 
-image_captioning_parser = PydanticOutputParser(
-    pydantic_object=ImageCaptionResponse
-)
+parser = PydanticOutputParser(pydantic_object=ImageCaptionResponse)

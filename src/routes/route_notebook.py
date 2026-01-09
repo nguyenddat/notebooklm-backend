@@ -82,7 +82,8 @@ def create_notebook(
             notebook_source = NotebookSource(notebook_id=new_notebook.id, source_id=source.id)
             notebook_source_service.add(notebook_source, db)
 
-            retrieve_service.index_source(source.id, file_path, new_notebook.id)
+            # retrieve_service.process_and_index(source.id, file_path, new_notebook.id)
+            tree = retrieve_service.process_file(source.id, file_path, new_notebook.id)
 
         success_file.append(source)        
     

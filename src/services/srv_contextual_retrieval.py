@@ -4,13 +4,13 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 
-from core.llm import summary_llm
+from core.llm import openai_llm
 from utils.token_count import estimate_token_count
 
 class ContextualRetrievalService:
     def __init__(self):
         self.document_converter = DocumentConverter()
-        self.llm = summary_llm
+        self.llm = openai_llm
         self.context_len = 128000
 
     # chuyển file thành text/ markdown

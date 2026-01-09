@@ -1,12 +1,13 @@
 import os
 import html
+import math
 import json
 import uuid
 import base64
 import pathlib
 import logging
 import textwrap
-from typing import Optional, List, Dict, Any, Tuple, Union
+from typing import Optional, List, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import graphviz
@@ -15,23 +16,20 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
 
 from core import config, openai_embeddings, latex_ocr
 from utils.image_caption import pil_to_data_url
 from services.srv_qdrant import qdrant_service
 from services.srv_llm import llm_service
 
-from pydantic import BaseModel, Field
-class TextLeaf(BaseModel):
-    index: Optional[int] = Field(0, description="Thứ tự của văn bản")
-    text: str = Field(description="Nội dung văn bản")
-    page: Optional[int] = Field(..., description="Số trang của văn bản")
+from pydantic import BaseModel, Field, TypeAdapter
 
-class ImageLeaf(BaseModel):
-    index: Optional[int] = Field(0, description="Thứ tự của hình ảnh")
-    text: Optional[str] = Field(..., description="Caption của hình ảnh")
-    page: Optional[int] = Field(..., description="Số trang của hình ảnh")
+class TextLeaf(BaseModel):
+    index: int = Field(0, description="Thứ tự của văn bản")
+    text: Optional[str] = Field(..., description="Nội dung văn bản")
+    page: int = Field(..., description="Số trang của văn bản")
+
+class ImageLeaf(TextLeaf):
     image_path: str = Field(description="Đường dẫn tương đối đến hình ảnh")
 
 class SectionNode(BaseModel):
@@ -44,13 +42,16 @@ class SectionNode(BaseModel):
 
     children: List[Union["SectionNode", TextLeaf, ImageLeaf]] = Field(
         description="Danh sách các phần tử con của chương hoặc mục",
-        default=[])
+        default=[]
+    )
 
 SectionNode.model_rebuild()
 
 logger = logging.getLogger(__name__)
 
 class RetrieveService:
+    MAX_CONTEXT_CHARS = 2500
+    BOOST_WEIGHT = 0.4
     EMBED_BATCH = 64
     MIN_IMAGE_AREA = 500
 
@@ -60,11 +61,10 @@ class RetrieveService:
         self.splitter = self._init_splitter(chunk_size, chunk_overlap)
         logger.info(f"Initialized RetrieveService with chunk_size={chunk_size}")
 
+
     def process_file(self, source_id: int, file_path: str, notebook_id: Optional[int] = None):
         logger.info(f"Starting processing file: {file_path} (source_id: {source_id})")
-        
         try:
-            # Chuyển đổi PDF
             conversion_result = self.converter.convert(file_path)
             logger.info("PDF conversion completed successfully.")
             
@@ -73,30 +73,21 @@ class RetrieveService:
             os.makedirs(image_save_dir, exist_ok=True)
             logger.info(f"Artifact directory created: {image_save_dir}")
 
-            # 1. Trích xuất cấu trúc phẳng
             logger.info("\t1. Extracting flat structure from document items...")
             flat_sections = self._process_structure(conversion_result, image_save_dir)
             logger.info(f"Extracted {len(flat_sections)} flat sections.")
             
-            # 2. LLM dựng cây phân cấp
             logger.info("\t2. Building hierarchical tree with LLM...")
             hierarchical_tree = self._build_section_hierarchical_tree(flat_sections)
             
-            # 3. Post-process: End-page
             logger.info("\t3. Post-process: Cập nhật end_page cho các SectionNode...")
             hierarchical_tree = self._post_endpage_process(hierarchical_tree)
 
-            # 4. Post-process: Title Contextual
             logger.info("\t4. Post-process: Cập nhật title context cho các SectionNode...")
             hierarchical_tree = self._post_section_title_context(hierarchical_tree)
 
-            # 5. Post-process: Captioning ảnh song song
             logger.info("\t5. Post-process: Image captioning...")
             self._post_image_process(hierarchical_tree)
-            
-            # 5. # Vẽ và lưu sơ đồ cây vào thư mục artifact
-            plot_path = os.path.join(image_save_dir, "document_structure")
-            self._plot_tree(hierarchical_tree, plot_path)
 
             logger.info(f"Successfully processed file: {file_basename}")
             return hierarchical_tree
@@ -104,6 +95,146 @@ class RetrieveService:
         except Exception as e:
             logger.error(f"Error processing file {file_path}: {str(e)}", exc_info=True)
             raise e
+        
+    def retrieve(self, query: str, source_id: int, top_k: int = 5):
+        query_vector = openai_embeddings.embed_query(query)
+
+        text_hits = qdrant_service.search(
+            query_embedding=query_vector,
+            top_k=top_k * 2,
+            doc_ids=[str(source_id)],
+            types=["text"],
+        )
+
+        image_hits = qdrant_service.search(
+            query_embedding=query_vector,
+            top_k=top_k,
+            doc_ids=[str(source_id)],
+            types=["image"],
+        )
+
+        texts = []
+        images = []
+
+        for hit in text_hits:
+            payload = hit["payload"]
+            texts.append(payload["text"])
+
+        for hit in image_hits:
+            payload = hit["payload"]
+            images.append({
+                "caption": payload["text"],
+                "image_path": payload["image_path"],
+                "page": payload.get("page"),
+                "breadcrumb": payload.get("breadcrumb"),
+            })
+
+        return {
+            "texts": texts[:top_k],
+            "images": images[:top_k],
+        }
+    
+    def index(self, source_id: int, tree: List[SectionNode], notebook_id: Optional[int] = None):
+        logger.info(f"Indexing source_id={source_id} with text + image chunks")
+
+        ordered_nodes = self._collect_ordered_text(tree)
+        if not ordered_nodes:
+            return {"status": "empty", "points": 0}
+
+        all_chunks = []
+
+        # INDEX TEXT CHUNKS
+        text_items = [n for n in ordered_nodes if n["type"] == "text"]
+
+        if text_items:
+            full_doc = self._build_long_document(text_items)
+            chunks = self.splitter.split_text(full_doc)
+            embeddings = openai_embeddings.embed_documents(chunks)
+
+            for i, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
+                all_chunks.append({
+                    "chunk_id": str(uuid.uuid4()),
+                    "source_id": str(source_id),
+                    "notebook_id": notebook_id,
+                    "text": chunk_text,
+                    "index": i,
+                    "type": "text",
+                    "embedding": embedding,
+                })
+
+        # INDEX IMAGE CHUNKS
+        image_items = [
+            n for n in ordered_nodes
+            if n["type"] == "image" and n.get("text")
+        ]
+
+        if image_items:
+            captions = [img["text"] for img in image_items]
+            image_embeddings = openai_embeddings.embed_documents(captions)
+
+            for img, emb in zip(image_items, image_embeddings):
+                all_chunks.append({
+                    "chunk_id": str(uuid.uuid4()),
+                    "source_id": str(source_id),
+                    "notebook_id": notebook_id,
+                    "text": img["text"],
+                    "index": img["index"],
+                    "embedding": emb,
+                    "type": "image",
+                    "metadata": {
+                        "page": img["page"],
+                        "image_path": img["image_path"],
+                        "breadcrumb": img["breadcrumb"],
+                    }
+                })
+
+        logger.info(f"Indexed {len(all_chunks)} total chunks (text + image)")
+        return qdrant_service.insert_chunks(all_chunks)
+
+    def _collect_ordered_text(self, tree: List[SectionNode]) -> List[dict]:
+        collected = []
+
+        def traverse(nodes: List[Union[SectionNode, TextLeaf, ImageLeaf]], path_titles=[]):
+            for node in nodes:
+                if isinstance(node, SectionNode):
+                    raw_title = getattr(node, "_raw_title", node.title)
+                    traverse(node.children, path_titles + [raw_title])
+
+                elif isinstance(node, (TextLeaf, ImageLeaf)):
+                    if not node.text or len(node.text.strip()) < 5:
+                        continue
+
+                    collected.append({
+                        "index": node.index,
+                        "page": node.page,
+                        "text": node.text,
+                        "breadcrumb": " > ".join(path_titles),
+                        "type": "image" if isinstance(node, ImageLeaf) else "text",
+                        "image_path": getattr(node, "image_path", None)
+                    })
+
+        traverse(tree)
+        return sorted(collected, key=lambda x: x["index"])
+
+    def _build_long_document(self, ordered_nodes: List[dict]) -> str:
+        parts = []
+        for item in ordered_nodes:
+            prefix = f"[Page {item['page']}]"
+            if item["breadcrumb"]:
+                prefix += f" {item['breadcrumb']}:"
+
+            parts.append(f"{prefix}\n{item['text']}")
+        return "\n\n".join(parts)
+
+    def _pydantic_to_dict(self, hierarchical_tree):
+        adapter = TypeAdapter(List[SectionNode])
+        tree_data = adapter.dump_python(hierarchical_tree)
+        return tree_data
+    
+    def _dict_to_pydantic(self, tree_data):
+        adapter = TypeAdapter(List[SectionNode])
+        tree = adapter.validate_python(tree_data)
+        return tree
 
     def _process_structure(self, conversion_results, image_save_dir):
         sections = []
@@ -230,7 +361,7 @@ class RetrieveService:
                 if isinstance(node, SectionNode):
                     local_context = [
                         child.text for child in node.children 
-                        if isinstance(child, TextLeaf)
+                        if isinstance(child, TextLeaf) and child.text is not None
                     ]
                     
                     for child in node.children:
@@ -254,6 +385,52 @@ class RetrieveService:
                 img_leaf.text = res.get('description') or res.get('output') or "No description."
             except:
                 img_leaf.text = "No description."
+    
+    def _calculate_parent_boost(self, query: str, parent_titles: List[str]) -> float:
+        if not parent_titles:
+            return 0.0
+        
+        full_path_context = " ".join(parent_titles).lower()
+        query_words = set(query.lower().split())
+        
+        overlap = sum(1 for word in query_words if word in full_path_context)
+        return min(overlap / max(len(query_words), 1), 1.0)
+
+    def _get_recursive_text(self, node: Union[SectionNode, TextLeaf, ImageLeaf]) -> str:
+        if isinstance(node, TextLeaf):
+            return node.text if node.text else ""
+        if isinstance(node, ImageLeaf):
+            return f"\n[Hình ảnh (Trang {node.page}): {node.text or 'Mô tả không khả dụng'}]\n"
+        
+        res = [f"## {node.title}"]
+        for child in node.children:
+            res.append(self._get_recursive_text(child))
+        return "\n".join(res)
+
+    def _expand_context_recursively(self, path: List[SectionNode]) -> SectionNode:
+        current_best = path[-1]
+        
+        for node in reversed(path):
+            content_len = len(self._get_recursive_text(node))
+            if content_len < self.MAX_CONTEXT_CHARS:
+                current_best = node
+            else:
+                break
+        return current_best
+
+    def _find_path_to_index(self, tree: List[SectionNode], target_index: int) -> Optional[List[SectionNode]]:
+        for node in tree:
+            if node.index == target_index:
+                return [node]
+            
+            for child in node.children:
+                if isinstance(child, SectionNode):
+                    res = self._find_path_to_index([child], target_index)
+                    if res:
+                        return [node] + res
+                elif child.index == target_index:
+                    return [node]
+        return None
 
     def _process_docling_text_item(self, item, page):
         return TextLeaf(text=item.text.strip(), page=page)
@@ -274,7 +451,12 @@ class RetrieveService:
         img_filename = f"img_p{page}_{uuid.uuid4().hex[:8]}.png"
         img_full_path = os.path.join(image_save_dir, img_filename) 
         img.save(img_full_path)
-        return ImageLeaf(text=None, page=page, image_path=img_full_path)
+
+        relative_path = os.path.relpath(
+            img_full_path,
+            start=config.static_dir
+        )
+        return ImageLeaf(text=None, page=page, image_path=relative_path.replace(os.sep, "/"))
     
     def _process_formula(self, item, page, conversion_results) -> str:
         page_obj = conversion_results.pages[page - 1]
@@ -290,7 +472,7 @@ class RetrieveService:
         return latex_ocr(formula_img)
     
     def _execute_captioning_task(self, img_leaf: ImageLeaf, section_title: str, context: List[str]):
-        full_path = os.path.join(config.base_dir, img_leaf.image_path)
+        full_path = os.path.join(config.base_dir, "static", img_leaf.image_path)
         
         fmt = "png"
         mime_type = f"image/{fmt}"

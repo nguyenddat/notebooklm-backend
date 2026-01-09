@@ -1,7 +1,7 @@
 from models.entities import Message
 from models.entities.model_message import MessageRole
 from services.srv_base import BaseService
-from services.srv_llm import LLMService
+from services.srv_llm import llm_service
 
 class MessageService(BaseService[Message]):
     def __init__(self, model: type[Message]):
@@ -48,7 +48,7 @@ class MessageService(BaseService[Message]):
         
         # Gọi llm để tóm tắt
         params = {"question": "", "conversation_history": formatted_messages,}
-        result = LLMService.get_chat_completion("summarize_history", params)
+        result = llm_service.get_chat_completion("summarize_history", params)
         return result["response"]
 
     def chat(self, query: str, history: str, documents: str) -> str:
@@ -58,7 +58,7 @@ class MessageService(BaseService[Message]):
             "retrieved_documents": documents,
         }
 
-        result = LLMService.get_chat_completion("notebook_chat", params)
+        result = llm_service.get_chat_completion("notebook_chat", params)
         return result
 
 message_service = MessageService(Message)

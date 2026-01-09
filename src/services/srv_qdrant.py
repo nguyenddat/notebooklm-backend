@@ -52,10 +52,12 @@ class QdrantService:
             point_id = chunk.get("chunk_id") or str(uuid.uuid4())
 
             payload = {
-                "doc_id": chunk["doc_id"],
+                "source_id": str(chunk["source_id"]),
+                "notebook_id": chunk.get("notebook_id"),
                 "text": chunk["text"],
-                "section_path": chunk.get("section_path"),
-                "page": chunk.get("page"),
+                "index": chunk["index"],
+                "type": chunk["type"],
+                **chunk.get("metadata", {})
             }
 
             points.append(
@@ -70,7 +72,6 @@ class QdrantService:
             collection_name=self.collection_name,
             points=points,
         )
-
         return {"status": "inserted", "points": len(points)}
 
     def delete_chunks(
@@ -110,18 +111,27 @@ class QdrantService:
         query_embedding: List[float],
         top_k: int = 5,
         doc_ids: Optional[List[str]] = None,
+        types: Optional[List[str]] = None,
     ):
-        query_filter = None
+        must_conditions = []
 
         if doc_ids:
-            query_filter = Filter(
-                must=[
-                    FieldCondition(
-                        key="doc_id",
-                        match=MatchAny(any=doc_ids),
-                    )
-                ]
+            must_conditions.append(
+                FieldCondition(
+                    key="source_id",
+                    match=MatchAny(any=doc_ids),
+                )
             )
+
+        if types:
+            must_conditions.append(
+                FieldCondition(
+                    key="type",
+                    match=MatchAny(any=types),  # ["text"], ["image"], ["text", "image"]
+                )
+            )
+
+        query_filter = Filter(must=must_conditions) if must_conditions else None
 
         results = self.client.search(
             collection_name=self.collection_name,
@@ -135,8 +145,12 @@ class QdrantService:
             {
                 "chunk_id": r.id,
                 "score": r.score,
+                "payload": r.payload,
+                "index": r.payload.get("index"),
                 "text": r.payload.get("text"),
-                "doc_id": r.payload.get("doc_id"),
+                "type": r.payload.get("type"),
+                "image_path": r.payload.get("image_path"),
+                "source_id": r.payload.get("source_id"),
                 "page": r.payload.get("page"),
             }
             for r in results

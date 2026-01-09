@@ -77,7 +77,7 @@ def run_test():
     
     retrieve_body = {
         "user_query": user_query,
-        "docs_ids": source_ids
+        "source_id": source_ids[0]
     }
 
     import concurrent.futures
@@ -95,7 +95,7 @@ def run_test():
         resp = requests.post(retrieve_url, json=retrieve_body, headers=headers)
         resp.raise_for_status()
         print(f"Retrieved {len(resp.json())} relevant context chunks")
-        print(f"{resp.json()[0]["text"]}")
+        print(f"{resp.json()}")
         return resp.json()
 
     chat_history = {}

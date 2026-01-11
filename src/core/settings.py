@@ -30,6 +30,9 @@ class Config(BaseSettings):
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
     
+    # retrieve config
+    min_image_area: int = 500
+
 config = Config()
 os.makedirs(config.artifact_dir, exist_ok=True)
 os.makedirs(config.static_dir, exist_ok=True)

@@ -1,6 +1,5 @@
-import uuid
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import List, Optional
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, \
@@ -8,7 +7,7 @@ from qdrant_client.models import VectorParams, Distance, \
     SearchParams
 
 from core import config
-
+from utils.utils_qdrant import QdrantPayload, IndexedChunk, SearchResult
 
 @dataclass
 class QdrantService:
@@ -24,10 +23,9 @@ class QdrantService:
     def _ensure_collection(self):
         exists = self.client.collection_exists(self.collection_name)
 
-        if exists and not self.recreate:
-            return
-
-        if exists and self.recreate:
+        if exists:
+            if not self.recreate:
+                return
             self.client.delete_collection(self.collection_name)
 
         self.client.create_collection(
@@ -38,33 +36,34 @@ class QdrantService:
             ),
         )
 
-        # Index để filter doc_id
+        # Index để filter theo source_id
         self.client.create_payload_index(
             collection_name=self.collection_name,
-            field_name="doc_id",
+            field_name="source_id",
             field_schema="keyword",
         )
 
-    def insert_chunks(self, chunks: List[Dict]):
+    def insert_chunks(self, chunks: List[IndexedChunk]):
         points: List[PointStruct] = []
 
         for chunk in chunks:
-            point_id = chunk.get("chunk_id") or str(uuid.uuid4())
-
-            payload = {
-                "source_id": str(chunk["source_id"]),
-                "notebook_id": chunk.get("notebook_id"),
-                "text": chunk["text"],
-                "index": chunk["index"],
-                "type": chunk["type"],
-                **chunk.get("metadata", {})
-            }
+            payload = QdrantPayload(
+                source_id=chunk.source_id,
+                notebook_id=chunk.notebook_id,
+                chunk_id=chunk.chunk_id,
+                index=chunk.index,
+                type=chunk.type,
+                text=chunk.text,
+                image_path=chunk.image_path,
+                page=chunk.page,
+                breadcrumb=chunk.breadcrumb,
+            )
 
             points.append(
                 PointStruct(
-                    id=point_id,
-                    vector=chunk["embedding"],
-                    payload=payload,
+                    id=chunk.chunk_id,
+                    vector=chunk.embedding,
+                    payload=payload.model_dump(exclude_none=True),
                 )
             )
 
@@ -72,87 +71,74 @@ class QdrantService:
             collection_name=self.collection_name,
             points=points,
         )
+
         return {"status": "inserted", "points": len(points)}
 
-    def delete_chunks(
-        self,
-        doc_id: Optional[str] = None,
-        chunk_ids: Optional[List[str]] = None,
-    ):
-        if not doc_id and not chunk_ids:
-            raise ValueError("Không có doc_id hoặc chunk_ids")
+    def delete_by_source(self, source_id: str):
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=Filter(
+                must=[
+                    FieldCondition(
+                        key="source_id",
+                        match=MatchValue(value=source_id),
+                    )
+                ]
+            ),
+        )
+        return {"status": "deleted", "source_id": source_id}
 
-        # Xoá toàn bộ document
-        if doc_id:
-            self.client.delete(
-                collection_name=self.collection_name,
-                points_selector=Filter(
-                    must=[
-                        FieldCondition(
-                            key="doc_id",
-                            match=MatchValue(value=doc_id),
-                        )
-                    ]
-                ),
-            )
-
-            return {"status": "deleted", "doc_id": doc_id,}
-
-        if chunk_ids:
-            self.client.delete(
-                collection_name=self.collection_name,
-                points_selector=chunk_ids,
-            )
-
-            return {"status": "deleted", "chunk_ids": chunk_ids}
+    def delete_by_chunk_ids(self, chunk_ids: List[str]):
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=chunk_ids,
+        )
+        return {"status": "deleted", "chunk_ids": chunk_ids}
         
     def search(
         self,
         query_embedding: List[float],
         top_k: int = 5,
-        doc_ids: Optional[List[str]] = None,
+        source_ids: Optional[List[str]] = None,
         types: Optional[List[str]] = None,
-    ):
-        must_conditions = []
+    ) -> List[SearchResult]:
 
-        if doc_ids:
-            must_conditions.append(
+        must = []
+        if source_ids:
+            must.append(
                 FieldCondition(
                     key="source_id",
-                    match=MatchAny(any=doc_ids),
+                    match=MatchAny(any=source_ids),
                 )
             )
 
         if types:
-            must_conditions.append(
+            must.append(
                 FieldCondition(
                     key="type",
-                    match=MatchAny(any=types),  # ["text"], ["image"], ["text", "image"]
+                    match=MatchAny(any=types),
                 )
             )
-
-        query_filter = Filter(must=must_conditions) if must_conditions else None
 
         results = self.client.search(
             collection_name=self.collection_name,
             query_vector=query_embedding,
             limit=top_k,
-            query_filter=query_filter,
+            query_filter=Filter(must=must) if must else None,
             search_params=SearchParams(hnsw_ef=128),
         )
 
         return [
-            {
-                "chunk_id": r.id,
-                "score": r.score,
-                "payload": r.payload,
-                "index": r.payload.get("index"),
-                "text": r.payload.get("text"),
-                "type": r.payload.get("type"),
-                "image_path": r.payload.get("image_path"),
-                "source_id": r.payload.get("source_id"),
-                "page": r.payload.get("page"),
-            }
+            SearchResult(
+                chunk_id=r.id,
+                score=r.score,
+                source_id=r.payload["source_id"],
+                type=r.payload["type"],
+                text=r.payload["text"],
+                image_path=r.payload.get("image_path"),
+                page=r.payload.get("page"),
+                breadcrumb=r.payload.get("breadcrumb"),
+            )
             for r in results
         ]
 

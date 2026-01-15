@@ -10,8 +10,9 @@ from core import config
 from database import get_db
 from models.entities import User, Notebook, Source
 from models.relationship import NotebookSource
-from services import UserService, notebook_service, source_service, retrieve_service, notebook_source_service
-from utils import hash_file, check_valid_file_type
+from services.source.srv_docling import docling_service
+from services import UserService, notebook_service, source_service, notebook_source_service
+from utils import get_bytes_and_hash, check_valid_file_type
 
 router = APIRouter()
     
@@ -31,8 +32,19 @@ def get_notebook_by_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(UserService.get_current_user)
 ):
+    # Query notebook
     notebook = notebook_service.get_by_id(id, db)
-    return jsonable_encoder(notebook)
+    if not notebook:
+        raise HTTPException(status_code=404, detail="Notebook không tồn tại.")
+    
+    if notebook.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập notebook này.")
+    
+    sources = source_service.get_sources_by_notebook_id(notebook.id, db)
+
+    result = jsonable_encoder(notebook)
+    result["sources"] = [jsonable_encoder(source) for source in sources]    
+    return result
 
 @router.post("")
 def create_notebook(
@@ -49,55 +61,50 @@ def create_notebook(
         else:
             failed_files.append(file)
     
-    # Tạo notebook
+    if not valid_files:
+        raise HTTPException(400, detail="Không file nào hợp lệ với định dạng hỗ trợ.")
+
+    # Tạo notebook hoặc lấy notebook đã tồn tại
     new_notebook = Notebook(title=valid_files[0].filename, user_id=current_user.id)
     new_notebook = notebook_service.add(new_notebook, db)
     
     # Xử lý các file hợp lệ
     success_file = []
     for file in valid_files:
-        file_hash = hash_file(file.file)
         file_name = file.filename
-        
-        existed_source = source_service.get_source_by_file_hash(file_hash, db)
-        if existed_source:
-            source = existed_source
-            success_file.append(source)
-            continue
-
         unique_filename = str(uuid.uuid4())
         file_extension = os.path.splitext(file.filename)[1]
         file_path = os.path.join(config.static_dir, unique_filename + file_extension)
         with open(file_path, "wb") as f:
             f.write(file.file.read())
 
-        # Process thành công mới lưu vào db
-        
+        bytes, hash = get_bytes_and_hash(file_path)
         source = Source(
             title=file_name,
             filename=file_name,
             file_path=file_path,
-            file_hash=file_hash,
+            file_hash=hash
         )
         source = source_service.add(source, db)
 
         notebook_source = NotebookSource(notebook_id=new_notebook.id, source_id=source.id)
         notebook_source_service.add(notebook_source, db)
-
-        tree = retrieve_service.process_file(source.id, file_path, new_notebook.id)
-        retrieve_service.index(source.id, tree, new_notebook.id)
         
-        tree = retrieve_service._pydantic_to_dict(tree)
-        source.structure_config = tree
-        db.commit()
-        db.refresh(source)
-        success_file.append(source)
-    
-    return {
-        "notebook": jsonable_encoder(new_notebook),
-        "success_files": [jsonable_encoder(source) for source in success_file],
-        "failed_files": failed_files, 
-    }
+        flat_sections = docling_service.file_to_flat_sections(file_path)
+
+    if success_file:
+        return {
+            "notebook": jsonable_encoder(new_notebook),
+            "success_files": [jsonable_encoder(source) for source in success_file],
+            "failed_files": failed_files, 
+        }
+    else:
+        db.rollback()
+        return {
+            "notebook": None,
+            "success_files": [],
+            "failed_files": failed_files
+        }
     
 @router.delete("")
 def delete_notebook(

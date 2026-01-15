@@ -1,0 +1,1 @@
+from .srv_docling import docling_service

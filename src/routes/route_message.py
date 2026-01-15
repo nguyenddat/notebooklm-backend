@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.entities.model_message import MessageRole, Message
-from services import message_service, retrieve_service, UserService
+from services import message_service, UserService
 
 router = APIRouter()
 
@@ -34,7 +34,7 @@ class MessageCreateRequest(BaseModel):
 
 def format_retrieved_context(
     context: RetrievedContext,
-    static_base_url: str = "http://localhost:8000/static"
+    static_base_url: str = "static"
 ) -> str:
     sections: list[str] = []
 
@@ -89,18 +89,24 @@ def post_notebook_message(
     message_service.add(user_message, db)
 
     print(format_retrieved_context(message_request.documents))
+    documents = json.dumps(
+        message_request.documents.model_dump(),
+        ensure_ascii=False,
+        indent=2
+    )
     # Tạo AI response dựa trên truy vấn, lịch sử và tài liệu được truy xuất
     ai_response = message_service.chat(
         query=message_request.query,
         history=message_request.history,
-        documents=format_retrieved_context(message_request.documents))
+        documents=documents)
         # documents=format_retrieved_texts(message_request.documents)
 
-    ai_message = Message(
-        notebook_id=notebook_id,
-        role=MessageRole.ASSISTANT,
-        content=json.dumps(ai_response)
-    )
-    message_service.add(ai_message, db)
+    # ai_message = Message(
+    #     notebook_id=notebook_id,
+    #     role=MessageRole.ASSISTANT,
+    #     content=json.dumps(ai_response)
+    # )
+    # message_service.add(ai_message, db)
 
+    print(ai_response)
     return ai_response

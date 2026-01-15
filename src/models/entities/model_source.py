@@ -13,4 +13,9 @@ class Source(BareBaseModel):
     structure_config = Column(JSON, nullable=True)
     
     # Source - Notebook
-    notebook_source = relationship("NotebookSource", back_populates="source")
+    notebook_source = relationship(
+        "NotebookSource", 
+        back_populates="source",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )

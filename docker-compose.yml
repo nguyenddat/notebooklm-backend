@@ -10,7 +10,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -25,36 +25,56 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
-    # healthcheck:
-    #   test: ["CMD", "wget", "-qO-", "http://localhost:6333/collections"]
-    #   interval: 5s
-    #   timeout: 3s
-    #   retries: 10
-  
-  # backend:
-  #   build:
-  #     context: ./src
-  #     dockerfile: Dockerfile
-  #   container_name: notebook_backend
-  #   env_file:
-  #     - ./src/.env
-  #   volumes:
-  #     - ./src/.env:/app/.env:ro
-  #   ports:
-  #     - "4000:4000"
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #     qdrant:
-  #       condition: service_healthy
-  #   restart: unless-stopped
-  #   command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "4000", "--reload"]
-  #   networks:
-  #     - fast_api
+    networks:
+      - fast_api
+
+  redis:
+    image: redis:7-alpine
+    container_name: notebook_redis
+    command: redis-server --save "" --appendonly no
+    restart: unless-stopped
+    networks:
+      - fast_api
+
+  backend:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: notebook_backend
+    env_file:
+      - ./src/.env
+    environment:
+      - WATCHFILES_FORCE_POLLING=true
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - REDIS_URL=redis://redis:6379
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    volumes:
+      - ./src:/app
+      - ./src/.env:/app/.env
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    command: [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "4000", "--reload" ]
+    networks:
+      - fast_api
 
 volumes:
   postgres_data:
+    driver: local
   qdrant_data:
+    driver: local
 
 networks:
   fast_api:

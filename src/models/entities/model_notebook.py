@@ -10,5 +10,15 @@ class Notebook(BareBaseModel):
     
     # Notebook - User & Message
     user = relationship("User", back_populates="notebook")
-    message = relationship("Message", back_populates="notebook")
-    notebook_source = relationship("NotebookSource", back_populates="notebook")
+    message = relationship(
+        "Message", 
+        back_populates="notebook", 
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
+    notebook_source = relationship(
+        "NotebookSource", 
+        back_populates="notebook", 
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )

@@ -15,7 +15,7 @@ class LLMService:
             prompt, parser = get_prompt_by_task(task)
 
             # TEXT-ONLY TASK
-            if task in {"summarize_history", "notebook_chat", "correct_section_structure"}:
+            if task in {"summarize_history", "notebook_chat", "correct_section_structure", "rerank"}:
                 chain = prompt | openai_llm | parser
                 return chain.invoke(params).dict()
 
@@ -30,7 +30,6 @@ class LLMService:
         self,
         question: str,
         image_base64: str,
-        mime_type: str,
     ):
         return HumanMessage(
             content=[
@@ -46,7 +45,6 @@ class LLMService:
         question = params["question"]
         context = params["context"]
         image_base64 = params["image_base64"]
-        mime_type = params.get("mime_type", "image/png")
 
         # SYSTEM message
         system_messages = prompt.format_messages(context=context)
@@ -54,8 +52,7 @@ class LLMService:
         # HUMAN multimodal message
         human_message = self._build_image_human_message(
             question=question,
-            image_base64=image_base64,
-            mime_type=mime_type,
+            image_base64=image_base64
         )
 
         messages = system_messages + [human_message]

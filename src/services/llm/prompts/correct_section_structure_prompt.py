@@ -3,9 +3,8 @@ You are given a list of section headers extracted from a PDF document.
 Each header has an original order index, title, and page range.
 
 Your task:
-1. Infer the correct hierarchical structure (chapter / section / subsection).
-2. Assign a hierarchical tree structure.
-3. Keep the original section indices provided in the input. Do NOT reassign or change them.
+1. Infer the correct hierarchical structure (chapter / section / subsection) and assign into a hierarchical tree structure.
+3. Keep the id provided in the input. Do NOT reassign or change them.
 4. Root node should be level 0 with title "ROOT".
 5. Do NOT invent or remove sections.
 6. Do NOT modify titles.

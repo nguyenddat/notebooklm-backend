@@ -44,7 +44,7 @@ def format_retrieved_context(
             text_blocks.append(
                 f"({idx}) {text.strip()}"
             )
-        sections.append("\n\n".join(text_blocks))
+        sections.append("\n".join(text_blocks))
 
     if context.images:
         image_blocks = ["\n### Hình ảnh có thể liên quan minh họa\n"]

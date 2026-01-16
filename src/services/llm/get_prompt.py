@@ -1,8 +1,8 @@
 from langchain_core.prompts import ChatPromptTemplate
 
-from utils.chatbot.parsers import summarize_history_parser, notebook_chat_parser, \
+from .parsers import summarize_history_parser, notebook_chat_parser, \
     image_captioning_parser, correct_section_structure_parser, rerank_parser
-from utils.chatbot.prompts import summarize_history_prompt, notebook_chat_prompt, \
+from .prompts import summarize_history_prompt, notebook_chat_prompt, \
     image_captioning_prompt, correct_section_structure_prompt, rerank_prompt
 
 def get_prompt_by_task(task: str):
@@ -29,7 +29,6 @@ def get_prompt_by_task(task: str):
     else:
         raise ValueError(f"Unknown task: {task}")
     
-
     # Messages
     system_message = ChatPromptTemplate.from_messages(
         [

@@ -78,20 +78,15 @@ def create_notebook(
         with open(file_path, "wb") as f:
             f.write(file.file.read())
 
-        bytes, hash = get_bytes_and_hash(file_path)
-        source = Source(
-            title=file_name,
-            filename=file_name,
-            file_path=file_path,
-            file_hash=hash
-        )
+        source = Source(title=file_name, filename=file_name, file_path=file_path)
         source = source_service.add(source, db)
 
         notebook_source = NotebookSource(notebook_id=new_notebook.id, source_id=source.id)
         notebook_source_service.add(notebook_source, db)
         
-        flat_sections = docling_service.file_to_flat_sections(file_path)
-
+        if source_service.process_file(file_path, source.id):
+            success_file.append(file_name)
+            
     if success_file:
         return {
             "notebook": jsonable_encoder(new_notebook),

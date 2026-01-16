@@ -1,5 +1,6 @@
 import re
 import hashlib
+import unicodedata
 from pathlib import Path
 from typing import Union
 
@@ -18,7 +19,9 @@ def get_bytes_and_hash(file: Union[bytes, str, Path]):
     return content, file_hash
 
 def normalize_text(text: str) -> str:
-    if not text: return text
-    text = re.sub(r'(?<=[A-Za-zÀ-ỹ])\s+(?=[A-Za-zÀ-ỹ])', ' ', text)
-    text = re.sub(r'\s+', ' ', text)
+    if not text:
+        return ""
+
+    text = unicodedata.normalize("NFC", text)
+    text = " ".join(text.split())
     return text.strip()

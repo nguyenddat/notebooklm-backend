@@ -2,9 +2,8 @@ import threading
 from typing import Dict
 
 from core.llm import openai_llm, gemini_llm
-from utils.get_prompt import get_prompt_by_task
+from .get_prompt import get_prompt_by_task
 from langchain_core.messages import HumanMessage
-
 
 class LLMService:
     def __init__(self, max_concurrent: int = 3):
@@ -43,11 +42,10 @@ class LLMService:
 
     def _run_image_task(self, prompt, parser, params: Dict):
         question = params["question"]
-        context = params["context"]
         image_base64 = params["image_base64"]
 
         # SYSTEM message
-        system_messages = prompt.format_messages(context=context)
+        system_messages = prompt.format_messages()
 
         # HUMAN multimodal message
         human_message = self._build_image_human_message(

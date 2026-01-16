@@ -1,6 +1,6 @@
-import io
 import os
 import uuid
+import tempfile
 from pathlib import Path
 from typing import Union, List, Any, Optional
 
@@ -11,7 +11,7 @@ from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.document import ConversionResult
 
-from core import config, log, latex_ocr
+from core import config, logger, latex_ocr
 from utils.hash import get_bytes_and_hash, normalize_text
 from services.redis import redis_service, RedisKeys
 from services.source.data_models import SectionNode
@@ -25,33 +25,20 @@ class DoclingService:
             format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)}
         )
         
-    def file_to_flat_sections(self, file: Union[bytes, str, Path]) -> List[SectionNode]:
+    def file_to_flat_sections(self, file: Union[str, Path]) -> List[SectionNode]:
         conversion_result = self.load_file(file)
-        flat_sections = self.process_conversion_result(conversion_result)
+        
+        image_dir = Path(config.static_dir) / file.stem
+        image_dir.mkdir(parents=True, exist_ok=True)
+        
+        flat_sections = self.process_conversion_result(conversion_result, image_dir)        
         return flat_sections
 
     def load_file(self, file: Union[bytes, str, Path]) -> ConversionResult:
-        file_bytes, file_hash = get_bytes_and_hash(file)
-        cache_key = RedisKeys.doc_cache(file_hash)
-        
-        # Kiểm tra cache
-        cached_result = redis_service.get_object(cache_key)
-        if cached_result:
-            log.info(f"Cache Hit: {file_hash[:10]}")
-            return cached_result
-
-        # Convert nếu chưa có cache
-        log.info(f"Cache Miss: Đang xử lý {file_hash[:10]}...")
-        source = io.BytesIO(file_bytes)        
-        result = self.converter.convert(source, input_format=InputFormat.PDF)
-        
-        # 4. Lưu cache
-        redis_service.set_object(cache_key, result)
-        log.success(f"Đã lưu cache thành công")
-        
+        result = self.converter.convert(file)
         return result
     
-    def process_conversion_result(self, result: ConversionResult) -> List[SectionNode]:
+    def process_conversion_result(self, result: ConversionResult, image_save_dir: Union[str, Path]) -> List[SectionNode]:
         sections: List[SectionNode] = []
         current_header: Optional[SectionNode] = None
         
@@ -59,47 +46,62 @@ class DoclingService:
             prov = item.prov[0] if item.prov else None
             page = prov.page_no if prov else 1
             
-            node = self.process_item(i, item, page, result)
+            node = self.process_item(i, item, page, result, image_save_dir)
             if node is None:
                 continue
             
-            # Nếu là header thì tạo header mới,
-            if node.title == "header":
+            # Nếu là header thì tạo header mới
+            if node.label == "header":
                 if current_header:
                     sections.append(current_header)
                 current_header = node
             else:
                 if current_header:
-                    node.parent_id = current_header.point_id
+                    node.parent_id = current_header.order_id
                     current_header.children.append(node)
                 
                 else:
                     sections.append(node)
-            
-            if current_header:
-                sections.append(current_header)
+        
+        if current_header:
+            sections.append(current_header)               
         return sections
                         
-    def process_item(self, index: int, item: Any, page: int, result: ConversionResult) -> SectionNode | None:
+    def process_item(self, index: int, item: Any, page: int, result: ConversionResult, image_save_dir: Union[str, Path]) -> SectionNode | None:
         label = item.__class__.__name__
         node = SectionNode(order_id=index, page=page, label=label)
         if label == "SectionHeaderItem":
             label = "header"
             node.label = label
             
+            content = normalize_text(item.text)
+            if not content:
+                return None
+            
             node.title = content
             node.content = content
-            content = normalize_text(item.text)
+            return node
+
+        elif label == "TextItem":
+            label = "text"
+            node.label = label
             
-            return node if content else None
+            content = normalize_text(item.text)
+            if not content:
+                return None
+            
+            node.content = content
+            return node
         
         elif label == "TableItem":
             label = "table"
             node.label = label
 
-            table_md = item.export_to_markdown()
-            node.content = table_md
+            table_md = item.export_to_markdown(doc=result.document)
+            if not table_md:
+                return None
             
+            node.content = table_md
             return node if table_md else None
         
         elif label == "FormulaItem":
@@ -136,7 +138,7 @@ class DoclingService:
                 return None
             
             filename = f"img_p{page}_{uuid.uuid4().hex[:8]}.png"
-            img_path = Path(config.image_save_dir) / filename
+            img_path = Path(image_save_dir) / filename
             img.save(img_path)
 
             label = "image"
@@ -156,7 +158,7 @@ class DoclingService:
             return node if text else None
 
         else:
-            log.warning(f"Chưa hỗ trợ xử lý item type: {label}")
+            logger.warning(f"Chưa hỗ trợ xử lý item type: {label}")
             return None
 
 docling_service = DoclingService()

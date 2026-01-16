@@ -4,9 +4,6 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 class SectionNode(BaseModel):
-    point_id: str = Field(description="Unique id cho qdrant point",
-                          default_factory=lambda: str(uuid.uuid4())
-    )
     order_id: int = Field(..., description="Thứ tự của section trong source")
     
     label: Optional[str] = Field(None, description="Section label nếu có")
@@ -20,8 +17,14 @@ class SectionNode(BaseModel):
     page: Optional[int] = Field(None, description="Trang của section nếu có")
     
     # Metadata cho image
+    caption: Optional[str] = Field(None, description="Caption của ảnh")
     image_path: Optional[str] = Field(None, description="Đường dẫn image nếu section là image")
     
+    def is_header(self) -> bool:
+        return self.label == "header"
+    
+    def is_text(self) -> bool:
+        return (not self.is_image()) and self.label != "header"
     
     def is_image(self) -> bool:
         return self.image_path is not None

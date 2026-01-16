@@ -7,7 +7,7 @@ openai_embeddings = OpenAIEmbeddings(api_key=config.openai_api_key)
 
 openai_llm = ChatOpenAI(model_name="gpt-4.1-mini", api_key=config.openai_api_key, temperature=0)
 gemini_llm = ChatOpenAI(
-    model_name="google/gemini-2.5-flash-preview-09-2025",
+    model_name="google/gemini-2.5-flash",
     openai_api_key=config.openrouter_api_key,
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0

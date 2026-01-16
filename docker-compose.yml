@@ -31,6 +31,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: notebook_redis
+    volumes:
+      - ./mount-data/redis:/data
     command: redis-server --save "" --appendonly no
     restart: unless-stopped
     networks:
@@ -45,9 +47,8 @@ services:
       - ./src/.env
     environment:
       - WATCHFILES_FORCE_POLLING=true
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - REDIS_URL=redis://redis:6379
+    gpus: all
     deploy:
       resources:
         reservations:

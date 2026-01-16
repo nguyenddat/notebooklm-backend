@@ -3,7 +3,7 @@ import zlib
 import redis
 import pickle
 
-from core import log
+from core import logger
 from typing import Any, Optional
 
 class RedisService:
@@ -13,21 +13,23 @@ class RedisService:
         try:
             self.client = redis.from_url(self.redis_url, decode_responses=False)
             self.client.ping()
-            log.info(f"Đã kết nối Redis tại {self.redis_url}")
+            logger.info(f"Đã kết nối Redis tại {self.redis_url}")
         except Exception as e:
-            log.error(f"Lỗi kết nối Redis: {e}")
+            logger.error(f"Lỗi kết nối Redis: {e}")
             self.client = None
     
-    def set_object(self, key: str, obj: Any, ttl: int = 86400):
-        if not self.client: 
-            return
-    
+    def set_object(self, key: str, obj: Any, ttl: int = 86400) -> bool:
+        if not self.client:
+            return False
+
         try:
             serialized = pickle.dumps(obj)
             compressed = zlib.compress(serialized)
             self.client.setex(key, ttl, compressed)
+            return True
         except Exception as e:
-            log.error(f"Redis Set Error: {e}")
+            logger.error(f"Redis Set Error: {e}")
+            return False
     
     def get_object(self, key: str) -> Optional[Any]:
         if not self.client: 
@@ -42,7 +44,7 @@ class RedisService:
             obj = pickle.loads(serialized)
             return obj
         except Exception as e:
-            log.error(f"Redis Get Error: {e}")
+            logger.error(f"Redis Get Error: {e}")
             return None
 
 redis_service = RedisService()

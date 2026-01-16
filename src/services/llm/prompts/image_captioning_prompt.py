@@ -18,7 +18,5 @@ CÁC QUY TẮC "VÀNG" (BẮT BUỘC):
 - KHÔNG sử dụng các cụm từ dẫn nhập thừa thãi như "Hình ảnh này cho thấy..." hay "Trong ảnh chụp màn hình...". Hãy bắt đầu trực tiếp bằng hướng dẫn.
 - Không suy diễn logic phía server hoặc các đường dẫn URL không hiển thị rõ ràng.
 
-NGỮ CẢNH: {context}
-
 Trả về kết quả TUÂN THỦ NGHIÊM NGẶT theo schema JSON bên dưới:
 """

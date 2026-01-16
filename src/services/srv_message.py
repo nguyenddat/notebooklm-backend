@@ -1,7 +1,7 @@
 from models.entities import Message
 from models.entities.model_message import MessageRole
 from services.srv_base import BaseService
-from services.srv_llm import llm_service
+from services.llm.srv_llm import llm_service
 
 class MessageService(BaseService[Message]):
     def __init__(self, model: type[Message]):

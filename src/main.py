@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
-from core import settings, setup_app_logging
+from core import settings, setup_logging
 from routes import total_router
 
 def get_application() -> FastAPI:
@@ -32,7 +32,7 @@ def get_application() -> FastAPI:
         name="static"
     )
 
-    setup_app_logging()
+    setup_logging()
     
     application.include_router(total_router)
     return application

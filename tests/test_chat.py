@@ -5,7 +5,7 @@ import sys
 # Configuration
 email = "dinhdat201fb@gmail.com"
 password = "123456"
-API_URL = "http://localhost:8000/api/"
+API_URL = "http://localhost:4000/api/"
 
 def print_step(step_name):
     print(f"\n{'='*20} {step_name} {'='*20}")
@@ -50,7 +50,7 @@ def run_test():
             
         first_notebook = notebooks[0]
         notebook_id = first_notebook.get("id")
-        print(f"Selected notebook: {first_notebook.get('name')} (ID: {notebook_id})")
+        print(f"Selected notebook: {first_notebook.get('title')} (ID: {notebook_id})")
     except Exception as e:
         print(f"Get notebooks failed: {e}")
         sys.exit(1)
@@ -77,7 +77,7 @@ def run_test():
     
     retrieve_body = {
         "user_query": user_query,
-        "source_id": source_ids[0]
+        "source_ids": [source_ids[0]]
     }
 
     import concurrent.futures

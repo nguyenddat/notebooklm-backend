@@ -1,4 +1,4 @@
-from typing import List, Literal, Union
+from typing import List, Literal, Union, Optional
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import PydanticOutputParser
 
@@ -13,6 +13,11 @@ class ImageMessage(BaseModel):
 
 MessageItem = Union[TextMessage, ImageMessage]
 
+class Citation(BaseModel):
+    text: str = Field(..., description="Nội dung trích dẫn ngắn gọn từ tài liệu nguồn.")
+    page_number: int = Field(..., description="Số trang của nguồn trích dẫn.")
+    breadcrumb: Optional[str] = Field(None, description="Đường dẫn mục lục (ví dụ: Chương 1 > Mục 2).")
+
 class NotebookChatResponse(BaseModel):
     messages: List[MessageItem] = Field(
         ...,
@@ -22,9 +27,9 @@ class NotebookChatResponse(BaseModel):
         default_factory=list,
         description="Danh sách câu hỏi hoặc bước tiếp theo gợi ý."
     )
-    citations: List[str] = Field(
+    citations: List[Citation] = Field(
         default_factory=list,
-        description="Danh sách nguồn trích dẫn trong tài liệu."
+        description="Danh sách nguồn trích dẫn kèm số trang."
     )
 
 parser = PydanticOutputParser(pydantic_object=NotebookChatResponse)

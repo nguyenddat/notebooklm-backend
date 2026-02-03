@@ -88,7 +88,7 @@ class QdrantService:
         )
         return {"status": "deleted", "chunk_ids": chunk_ids}
         
-    def search(self, query: str, top_k: int = 10, source_ids: Optional[List[str]] = None, type: Literal["text", "image"] = None):
+    def search(self, query: str, top_k: int = 10, source_ids: Optional[List[int]] = None, type: Literal["text", "image"] = None):
         # Embed query
         query_embedding = openai_embeddings.embed_query(query)
         

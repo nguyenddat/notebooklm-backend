@@ -36,14 +36,7 @@ async def normal_retrieve(
         params["top_k"] = min(len(texts), 3)
         params["documents"] = texts
         doc_indices = llm_service.get_chat_completion(task, params)["reranked_indices"]
-        texts = [
-            {
-                "content": texts[i]["content"],
-                "page": texts[i]["metadata"].get("page_start"),
-                "breadcrumb": " > ".join(texts[i]["metadata"].get("breadcrumb", []))
-            }
-            for i in doc_indices if isinstance(i, int) and 0 <= i < len(texts)
-        ]
+        texts = [texts[i]["content"] for i in doc_indices if isinstance(i, int) and 0 <= i < len(texts)]
     
     images = qdrant_service.search(
         query=question,

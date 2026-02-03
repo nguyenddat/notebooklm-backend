@@ -4,6 +4,8 @@ from typing import Literal, List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 class QdrantDocumentMetadata(BaseModel):
+    file_path: str = Field(..., description="Đường dẫn tĩnh tới tài liệu gốc")
+    filename: str = Field(..., description="Tên file gốc")
     page_start: int = Field(..., description="Trang bắt đầu của nội dung")
     page_end: int = Field(..., description="Trang kết thúc của nội dung")
     breadcrumb: List[str] = Field(

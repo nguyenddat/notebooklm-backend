@@ -19,12 +19,23 @@ from pydantic import BaseModel
 
 class RetrievedImage(BaseModel):
     caption: str
+    
+    filename: str
+    file_path: str
     image_path: str
+    
+    page: int | None = None
+    breadcrumb: str | None = None
+
+class RetrievedText(BaseModel):
+    content: str
+    filename: str
+    file_path: str
     page: int | None = None
     breadcrumb: str | None = None
 
 class RetrievedContext(BaseModel):
-    texts: list[str] = []
+    texts: list[RetrievedText] = []
     images: list[RetrievedImage] = []
 
 class MessageCreateRequest(BaseModel):
@@ -41,8 +52,13 @@ def format_retrieved_context(
     if context.texts:
         text_blocks = ["### Nội dung liên quan\n"]
         for idx, text in enumerate(context.texts, start=1):
+            meta_lines = []
+            meta_lines.append(f"**Tên gốc của file:** {text.filename} - Đường dẫn: {text.file_path}")
+            if text.breadcrumb:
+                meta_lines.append(f"**Mục:** {text.breadcrumb} - Trang: {text.page}")
+            meta = "\n".join(meta_lines)
             text_blocks.append(
-                f"({idx}) {text.strip()}"
+                f"({idx}) {meta}\n{text.strip()}"
             )
         sections.append("\n".join(text_blocks))
 
@@ -52,13 +68,11 @@ def format_retrieved_context(
         for idx, img in enumerate(context.images, start=1):
             meta_lines = []
 
+            meta_lines.append(f"**Tên gốc của file:** {img.filename}\nĐường dẫn: {img.file_path}")
             if img.breadcrumb:
-                meta_lines.append(f"**Mục:** {img.breadcrumb}")
+                meta_lines.append(f"**Mục:** {img.breadcrumb} - Trang: {img.page}")
 
-            if img.page is not None:
-                meta_lines.append(f"**Trang:** {img.page}")
-
-            meta = " · ".join(meta_lines)
+            meta = "\n".join(meta_lines)
 
             # Markdown image (static path)
             image_url = f"{static_base_url}/{img.image_path}"
@@ -88,7 +102,6 @@ def post_notebook_message(
     )
     message_service.add(user_message, db)
 
-    print(format_retrieved_context(message_request.documents))
     documents = json.dumps(
         message_request.documents.model_dump(),
         ensure_ascii=False,
@@ -98,15 +111,8 @@ def post_notebook_message(
     ai_response = message_service.chat(
         query=message_request.query,
         history=message_request.history,
-        documents=documents)
-        # documents=format_retrieved_texts(message_request.documents)
-
-    # ai_message = Message(
-    #     notebook_id=notebook_id,
-    #     role=MessageRole.ASSISTANT,
-    #     content=json.dumps(ai_response)
-    # )
-    # message_service.add(ai_message, db)
-
+        documents=documents
+    )
+    
     print(ai_response)
     return ai_response

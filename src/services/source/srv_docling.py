@@ -12,8 +12,7 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.document import ConversionResult
 
 from core import config, logger, latex_ocr
-from utils.hash import get_bytes_and_hash, normalize_text
-from services.redis import redis_service, RedisKeys
+from utils.hash import normalize_text
 from services.source.data_models import SectionNode
 
 class DoclingService:
@@ -31,14 +30,14 @@ class DoclingService:
         image_dir = Path(config.static_dir) / file.stem
         image_dir.mkdir(parents=True, exist_ok=True)
         
-        flat_sections = self.process_conversion_result(conversion_result, image_dir)        
+        flat_sections = self.process_conversion_result(conversion_result, image_dir, file)        
         return flat_sections
 
     def load_file(self, file: Union[bytes, str, Path]) -> ConversionResult:
         result = self.converter.convert(file)
         return result
     
-    def process_conversion_result(self, result: ConversionResult, image_save_dir: Union[str, Path]) -> List[SectionNode]:
+    def process_conversion_result(self, result: ConversionResult, image_save_dir: Union[str, Path], file_path: Union[str, Path]) -> List[SectionNode]:
         sections: List[SectionNode] = []
         current_header: Optional[SectionNode] = None
         
@@ -46,7 +45,7 @@ class DoclingService:
             prov = item.prov[0] if item.prov else None
             page = prov.page_no if prov else 1
             
-            node = self.process_item(i, item, page, result, image_save_dir)
+            node = self.process_item(i, item, page, result, image_save_dir, file_path)
             if node is None:
                 continue
             
@@ -67,9 +66,15 @@ class DoclingService:
             sections.append(current_header)               
         return sections
                         
-    def process_item(self, index: int, item: Any, page: int, result: ConversionResult, image_save_dir: Union[str, Path]) -> SectionNode | None:
+    def process_item(self, index: int, item: Any, page: int, result: ConversionResult, image_save_dir: Union[str, Path], file_path: Union[str, Path]) -> SectionNode | None:
         label = item.__class__.__name__
-        node = SectionNode(order_id=index, page=page, label=label)
+        filename = Path(file_path).name
+        # Remove /app/static prefix if present to keep path relative
+        clean_path = str(file_path).replace("/app/static/", "")
+        if clean_path.startswith("/"):
+             clean_path = clean_path.lstrip("/")
+             
+        node = SectionNode(order_id=index, page=page, label=label, file_path=clean_path, filename=filename)
         if label == "SectionHeaderItem":
             label = "header"
             node.label = label

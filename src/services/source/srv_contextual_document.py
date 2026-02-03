@@ -48,6 +48,8 @@ class ContextualDocumentService:
                 content=content,
                 type="image",
                 metadata=QdrantDocumentMetadata(
+                    file_path=img_node.file_path,
+                    filename=img_node.filename,
                     page_start=img_node.page,
                     page_end=img_node.page,
                     breadcrumb=breadcrumb,
@@ -102,6 +104,8 @@ class ContextualDocumentService:
                     type="text",
                     source_id=None,
                     metadata=QdrantDocumentMetadata(
+                        file_path=leaves[0].file_path,
+                        filename=leaves[0].filename,
                         page_start=leaves[0].page,
                         page_end=leaves[-1].page,
                         breadcrumb=breadcrumb

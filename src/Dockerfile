@@ -1,9 +1,9 @@
-FROM nvidia/cuda:12.3.2-runtime-ubuntu22.04
+FROM nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Asia/Ho_Chi_Minh
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    TZ=Asia/Ho_Chi_Minh
 
 # ---- System deps (stable, cache tốt)
 RUN ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
@@ -28,15 +28,10 @@ RUN python3.12 -m ensurepip --upgrade \
     && python3.12 -m pip install --upgrade pip setuptools wheel
 
 WORKDIR /app
-
-# ---- COPY requirements trước (cache cực tốt)
 COPY requirements.txt .
 
-# ---- Cài dependency nặng trước
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install \
-        torch torchvision torchaudio \
-        --index-url https://download.pytorch.org/whl/cu121 \
+    python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 \
     && python3 -m pip install onnxruntime-gpu \
     && python3 -m pip install -r requirements.txt \
     && python3 -m pip install python-multipart

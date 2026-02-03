@@ -10,11 +10,13 @@ class SectionNode(BaseModel):
     title: Optional[str] = Field(None, description="Section title")
     content: str = Field("", description="Raw text content của section")
     
-    breadcrumb: Optional[str] = Field(None, description="Breadcrumb context của section")
     parent_id: Optional[str] = Field(None, description="Parent section id")
     children: List["SectionNode"] = Field(default_factory=list)
     
     page: Optional[int] = Field(None, description="Trang của section nếu có")
+    breadcrumb: Optional[str] = Field(None, description="Breadcrumb context của section")
+    file_path: Optional[str] = Field(None, description="Đường dẫn tĩnh tới tài liệu gốc")
+    filename: Optional[str] = Field(None, description="Tên file gốc")
     
     # Metadata cho image
     caption: Optional[str] = Field(None, description="Caption của ảnh")

@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 
 
 from database import get_db
-from models.entities import Source
 from services import qdrant_service, llm_service
 
 router = APIRouter()
@@ -25,7 +24,6 @@ async def normal_retrieve(
 
     task = "rerank" 
     params = {"question": question}
-    # Query -> rerank
     texts = qdrant_service.search(
         query=question,
         source_ids=source_ids,
@@ -36,7 +34,16 @@ async def normal_retrieve(
         params["top_k"] = min(len(texts), 3)
         params["documents"] = texts
         doc_indices = llm_service.get_chat_completion(task, params)["reranked_indices"]
-        texts = [texts[i]["content"] for i in doc_indices if isinstance(i, int) and 0 <= i < len(texts)]
+        texts = [
+            {
+                "content": texts[i]["content"],
+                "page": texts[i]["metadata"]["page_start"],
+                "file_path": texts[i]["metadata"]["file_path"],
+                "filename": texts[i]["metadata"]["filename"],
+                "breadcrumb": " > ".join(texts[i]["metadata"]["breadcrumb"])
+            }
+            for i in doc_indices
+        ]
     
     images = qdrant_service.search(
         query=question,
@@ -54,6 +61,8 @@ async def normal_retrieve(
             return_images.append({
                 "caption": image["content"],
                 "image_path": image["metadata"].get("image_path"),
+                "file_path": image["metadata"]["file_path"],
+                "filename": image["metadata"]["filename"],
                 "page": image["metadata"]["page_start"],
                 "breadcrumb": " > ".join(image["metadata"]["breadcrumb"])
             })

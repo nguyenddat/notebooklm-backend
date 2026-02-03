@@ -11,6 +11,10 @@ Lưu ý:
   - caption: mô tả ngắn gọn, đúng với nội dung tài liệu
   - image_path: đường dẫn tĩnh lấy nguyên văn từ tài liệu
 - KHÔNG tự tạo caption mới ngoài tài liệu.
+- Mỗi trích dẫn trong `citations` PHẢI bao gồm:
+  - text: Nội dung trích dẫn ngắn gọn từ tài liệu nguồn
+  - page_number: Số trang nguồn (lấy từ trường `page` trong tài liệu truy xuất)
+  - breadcrumb: Đường dẫn mục lục (lấy từ trường `breadcrumb` trong tài liệu truy xuất, nếu có)
 
 Lịch sử trò chuyện: {conversation_history}
 

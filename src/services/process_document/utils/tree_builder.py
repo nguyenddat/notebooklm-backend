@@ -1,48 +1,42 @@
-from typing import List, Dict, Any
+from collections import deque
+from typing import List, Dict, Any, Optional
 
-from core import logger
+from core import config, logger
 from services.llm.srv_llm import llm_service
-from services.source.data_models import SectionNode
+from .data_models import SectionNode
 
 class TreeBuilder:
-    def __init__(self):
-        pass
-    
-    def build(self, flat_sections: List[SectionNode]) -> List[SectionNode]:
+    def build(self, flat_nodes: List[SectionNode]) -> List[SectionNode]:
         logger.info("TreeBuilder: start building section tree")
-        headers = self.collect_headers(flat_sections)
-        logger.info("Collected %d header sections", len(headers))
-        
-        skeleton = self.build_skeleton(headers)
-        logger.debug("Skeleton sent to LLM: %s", skeleton)
-        
-        # Gọi LLM
+
+        # Tiền xử lý cây bằng chuyển node text vào trong node header trên nó
+        naive_tree = self._naive_build_tree(flat_nodes)
+
+        # Thu thập roots của naive tree để LLM phân cấp
+        root_nodes = [node for node in naive_tree if node.label == "header"]
+        skeleton = [{"index": h.order_id, "title": h.content, "page": h.page} for h in root_nodes]
+
         task = "correct_section_structure"
         params = {"question": "", "sections": skeleton}
         llm_response = llm_service.get_chat_completion(task, params)["response"]
-        
-        # Map về List sections
-        header_roots = self.llm_to_headers(headers, llm_response)
-        self.log_ascii_tree(header_roots)
-        return header_roots
-    
-    def llm_to_headers(self, headers: List[SectionNode], llm_response: Any):
-        header_map = self.build_header_map(headers)
 
-        # reset children để tránh append trùng
-        for h in headers:
-            # h.children.clear()
-            h.parent_id = None
+        # Map về cây hoàn chỉnh
+        final_tree = self._llm_to_tree(llm_response, root_nodes)
+        self.log_ascii_tree(final_tree)
 
+        logger.info("TreeBuilder: tree built with %s nodes", len(final_tree))
+        return final_tree
+
+    def _llm_to_tree(self, llm_response: str, root_nodes: List[SectionNode]) -> List[SectionNode]:
+        header_map = {h.order_id: h for h in root_nodes}
         roots: List[SectionNode] = []
-
         for item in llm_response:
             index = item.get("index")
             parent_index = item.get("parent_index")
 
             node = header_map.get(index)
             if node is None:
-                logger.warning("Header index %s not found", index)
+                logger.info("Header index %s not found", index)
                 continue
 
             if parent_index is None:
@@ -50,7 +44,7 @@ class TreeBuilder:
             else:
                 parent = header_map.get(parent_index)
                 if parent is None:
-                    logger.warning(
+                    logger.info(
                         "Parent %s not found for header %s",
                         parent_index, index
                     )
@@ -61,33 +55,37 @@ class TreeBuilder:
 
         logger.info("TreeBuilder: built %d root headers", len(roots))
         return roots
+
+    def _naive_build_tree(self, flat_nodes: List[SectionNode]) -> List[SectionNode]:
+        roots = []
+        current_header: SectionNode = None
+        for node in flat_nodes:
+            if node.label == "header":
+                current_header = node
+                roots.append(node)
             
-    def build_skeleton(self, headers: List[SectionNode]) -> List[dict]:
-        return [
-            {
-                "index": h.order_id,
-                "title": h.title,
-                "page": h.page,
-            }
-            for h in headers
-        ]
+            else:
+                # Nếu chưa có header hiện tại --> roots
+                if not current_header:
+                    roots.append(node)
+
+                # Nếu có header hiện tại --> append vào children header hiện tại
+                else:
+                    current_header.children.append(node)
+                    node.parent_id = current_header.order_id
+        logger.info("TreeBuilder: naive tree built with %s nodes", len(roots))
+        return roots
     
-    def collect_headers(self, flat_sections: List[SectionNode]) -> List[SectionNode]:
-        return [s for s in flat_sections if s.label == "header"]
-
-    def build_header_map(self, headers: List[SectionNode]) -> Dict[int, SectionNode]:
-        return {h.order_id: h for h in headers}
-
 
     def log_ascii_tree(
         self,
         roots: List[SectionNode],
         *,
         show_page: bool = True,
-        max_title_len: int = 80,
+        max_title_len: int = 50,
     ):
         def fmt_title(node: SectionNode) -> str:
-            title = node.title or node.label
+            title = node.content or node.label
             if len(title) > max_title_len:
                 title = title[:max_title_len] + "…"
 
@@ -115,6 +113,5 @@ class TreeBuilder:
                 _log(child, "", j == len(root.children) - 1)
 
         logger.info("======== END SECTION TREE ========")
-
 
 tree_builder = TreeBuilder()

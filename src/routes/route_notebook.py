@@ -1,16 +1,16 @@
 import os
 import uuid
+import shutil
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
 from fastapi.encoders import jsonable_encoder
 
-from core import config
+from core import config, logger
 from database import get_db
 from models.entities import User, Notebook, Source
 from models.relationship import NotebookSource
-from services.source.srv_docling import docling_service
 from services import UserService, notebook_service, source_service, notebook_source_service
 from utils import get_bytes_and_hash, check_valid_file_type
 
@@ -52,54 +52,111 @@ def create_notebook(
     db: Session = Depends(get_db), 
     current_user: User = Depends(UserService.get_current_user)
 ):    
-    # Nếu không có file nào hợp lệ: pdf, docx, image thì báo lỗi
+    # Check định dạng: chỉ hỗ trợ pdf và docx
     valid_files = []
-    failed_files = []
+    invalid_format_files = []
+    
     for file in files:
         if check_valid_file_type(file.content_type):
             valid_files.append(file)
         else:
-            failed_files.append(file)
+            invalid_format_files.append(file.filename)
+            logger.warning(f"File '{file.filename}' không đúng định dạng hỗ trợ (pdf/docx)")
     
+    # Nếu không có file nào hợp lệ -> fail ngay
     if not valid_files:
-        raise HTTPException(400, detail="Không file nào hợp lệ với định dạng hỗ trợ.")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Không file nào hợp lệ. Chỉ hỗ trợ định dạng PDF và DOCX. Files bị từ chối: {invalid_format_files}"
+        )
 
-    # Tạo notebook hoặc lấy notebook đã tồn tại
+    # Tạo notebook mới
     new_notebook = Notebook(title=valid_files[0].filename, user_id=current_user.id)
     new_notebook = notebook_service.add(new_notebook, db)
     
-    # Xử lý các file hợp lệ
-    success_file = []
+    # Xử lý từng file hợp lệ
+    success_files = []
+    failed_files = list(invalid_format_files)  # Bắt đầu với các file sai định dạng
+    saved_paths = []  # Track các file đã lưu để cleanup khi fail
+    
+
     for file in valid_files:
         file_name = file.filename
-        unique_filename = str(uuid.uuid4())
-        file_extension = os.path.splitext(file.filename)[1]
-        file_path = os.path.join(config.static_dir, unique_filename + file_extension)
-        with open(file_path, "wb") as f:
-            f.write(file.file.read())
-
-        source = Source(title=file_name, filename=file_name, file_path=file_path)
+        unique_id = str(uuid.uuid4())
+        file_extension = os.path.splitext(file_name)[1].lower()
+        
+        # Chuẩn hóa đường dẫn lưu file
+        saved_filename = f"{unique_id}{file_extension}"
+        file_path = os.path.join(config.static_dir, saved_filename)
+        file_images_dir = os.path.join(config.static_dir, unique_id)
+        
+        # Lưu file vào disk
+        try:
+            with open(file_path, "wb") as f:
+                f.write(file.file.read())
+            saved_paths.append((file_path, file_images_dir))  # Track để cleanup
+        except Exception as e:
+            logger.error(f"Lỗi lưu file '{file_name}': {e}")
+            failed_files.append(file_name)
+            continue
+        
+        # DB chỉ lưu tên file unique, không lưu full path
+        source = Source(
+            title=file_name, 
+            filename=file_name, 
+            file_path=saved_filename
+        )
         source = source_service.add(source, db)
 
+        # Link notebook với source
         notebook_source = NotebookSource(notebook_id=new_notebook.id, source_id=source.id)
         notebook_source_service.add(notebook_source, db)
         
-        if source_service.process_file(file_path, source.id):
-            success_file.append(file_name)
-            
-    if success_file:
-        return {
-            "notebook": jsonable_encoder(new_notebook),
-            "success_files": [jsonable_encoder(source) for source in success_file],
-            "failed_files": failed_files, 
-        }
-    else:
-        db.rollback()
-        return {
-            "notebook": None,
-            "success_files": [],
-            "failed_files": failed_files
-        }
+        try:
+            result = source_service.process_file(file_path, file_name, source.id, file_images_dir)
+            if result:
+                success_files.append(file_name)
+                logger.info(f"Xử lý file '{file_name}' thành công")
+            else:
+                failed_files.append(file_name)
+                logger.warning(f"Xử lý file '{file_name}' trả về False")
+        except Exception as e:
+            logger.error(f"Lỗi xử lý file '{file_name}': {e}")
+            failed_files.append(file_name)
+            continue
+    
+    # Kiểm tra kết quả
+    if not success_files:
+        # Cleanup: xóa static files đã lưu
+        for file_path, images_dir in saved_paths:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    logger.info(f"Đã xóa file: {file_path}")
+                if os.path.exists(images_dir):
+                    shutil.rmtree(images_dir)
+                    logger.info(f"Đã xóa thư mục: {images_dir}")
+            except Exception as e:
+                logger.error(f"Lỗi xóa file/folder: {e}")
+        
+        # Cleanup: xóa notebook trong DB
+        try:
+            notebook_service.delete(new_notebook.id, db)
+            logger.info(f"Đã xóa notebook {new_notebook.id} do không có file nào xử lý thành công")
+        except Exception as e:
+            logger.error(f"Lỗi khi xóa notebook {new_notebook.id}: {e}")
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Xử lý thất bại tất cả files. Files lỗi: {failed_files}"
+        )
+    
+    # Có ít nhất 1 file thành công -> thành công
+    return {
+        "notebook": jsonable_encoder(new_notebook),
+        "success_files": success_files,
+        "failed_files": failed_files if failed_files else None,
+    }
     
 @router.delete("")
 def delete_notebook(

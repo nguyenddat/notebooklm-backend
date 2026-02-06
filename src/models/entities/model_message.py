@@ -13,7 +13,8 @@ class Message(BareBaseModel):
     role = Column(Enum(MessageRole))
     content = Column(Text, nullable=False)
     citations = Column(Text, nullable=True)
-    notebook_id = Column(Integer, ForeignKey("notebook.id"), nullable=False)
+    summary = Column(Text, nullable=True)
+    notebook_id = Column(Integer, ForeignKey("notebook.id", ondelete="CASCADE"), nullable=False)
     
     # Message - Conversation
     notebook = relationship("Notebook", back_populates="message")

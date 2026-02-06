@@ -10,4 +10,9 @@ class User(BareBaseModel):
     full_name = Column(String)
     
     # User - Notebook
-    notebook = relationship("Notebook", back_populates="user")
+    notebook = relationship(
+        "Notebook", 
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )

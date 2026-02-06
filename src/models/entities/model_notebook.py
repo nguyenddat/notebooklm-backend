@@ -6,7 +6,7 @@ from models.model_base import BareBaseModel
 class Notebook(BareBaseModel):
     title = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('user.id', ondelete="CASCADE"), nullable=False)
     
     # Notebook - User & Message
     user = relationship("User", back_populates="notebook")

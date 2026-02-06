@@ -1,3 +1,5 @@
+from typing import List
+
 from models.entities import Message
 from models.entities.model_message import MessageRole
 from services.srv_base import BaseService
@@ -23,10 +25,16 @@ class MessageService(BaseService[Message]):
 
         return list(reversed(messages))
     
-    def format_messages(
-        self,
-        messages: list[Message],
-    ) -> list[dict]:
+    def get_messages_by_notebook_id(self, notebook_id: int, db):
+        """Lấy tất cả tin nhắn của notebook theo thứ tự thời gian"""
+        return (
+            db.query(self.model)
+            .filter(self.model.notebook_id == notebook_id)
+            .order_by(self.model.id.asc())
+            .all()
+        )
+    
+    def format_messages(self, messages: list[Message]) -> list[dict]:
         conversation_lines = []
         for msg in messages:
             role = "User" if msg.role == MessageRole.USER else "Assistant"
@@ -37,10 +45,7 @@ class MessageService(BaseService[Message]):
         conversation_text = "\n".join(conversation_lines)
         return conversation_text
         
-    def summarize_conversation(
-        self,
-        messages: list[Message],
-    ) -> str:
+    def summarize_conversation(self, messages: list[Message]) -> str:
         formatted_messages = self.format_messages(messages)
         
         if not formatted_messages:
@@ -51,10 +56,9 @@ class MessageService(BaseService[Message]):
         result = llm_service.get_chat_completion("summarize_history", params)
         return result["response"]
 
-    def chat(self, query: str, history: str, documents: str) -> str:
+    def chat(self, query: str, documents: str) -> str:
         params = {
             "question": query,
-            "conversation_history": history,
             "retrieved_documents": documents,
         }
 

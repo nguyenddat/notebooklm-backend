@@ -1,9 +1,11 @@
 from langchain_core.prompts import ChatPromptTemplate
 
-from .parsers import summarize_history_parser, notebook_chat_parser, \
-    image_captioning_parser, correct_section_structure_parser, rerank_parser
-from .prompts import summarize_history_prompt, notebook_chat_prompt, \
-    image_captioning_prompt, correct_section_structure_prompt, rerank_prompt
+from .parsers import ocr_parser, summarize_history_parser, notebook_chat_parser, \
+    image_captioning_parser, correct_section_structure_parser, rerank_parser, \
+    rewrite_question_parser
+from .prompts import ocr_prompt, summarize_history_prompt, notebook_chat_prompt, \
+    image_captioning_prompt, correct_section_structure_prompt, rerank_prompt, \
+    rewrite_question_prompt
 
 def get_prompt_by_task(task: str):
     if task == "summarize_history":
@@ -26,6 +28,14 @@ def get_prompt_by_task(task: str):
         prompt_template = rerank_prompt.prompt
         parser = rerank_parser.parser
     
+    elif task == "image_captioning_v2":
+        prompt_template = ocr_prompt.prompt
+        parser = ocr_parser.parser
+    
+    elif task == "rewrite_question":
+        prompt_template = rewrite_question_prompt.prompt
+        parser = rewrite_question_parser.parser
+
     else:
         raise ValueError(f"Unknown task: {task}")
     

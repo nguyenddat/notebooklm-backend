@@ -99,14 +99,13 @@ class QdrantService:
         if type:
             must_filters.append(FieldCondition(key="type", match=MatchValue(value=type)))
         
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
             limit=top_k,
             query_filter=Filter(must=must_filters) if must_filters else None,
             search_params=SearchParams(hnsw_ef=128),
         )
-
         return [
             {
                 "chunk_id": str(r.id),
@@ -115,7 +114,7 @@ class QdrantService:
                 "type": r.payload.get("type", "text"),
                 "metadata": r.payload.get("metadata", {})
             }
-            for r in results
+            for r in results.points
         ]
 
 qdrant_service = QdrantService(

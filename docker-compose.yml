@@ -28,16 +28,6 @@ services:
     networks:
       - fast_api
 
-  redis:
-    image: redis:7-alpine
-    container_name: notebook_redis
-    volumes:
-      - ./mount-data/redis:/data
-    command: redis-server --save "" --appendonly no
-    restart: unless-stopped
-    networks:
-      - fast_api
-
   backend:
     build:
       context: ./src
@@ -45,17 +35,6 @@ services:
     container_name: notebook_backend
     env_file:
       - ./src/.env
-    environment:
-      - WATCHFILES_FORCE_POLLING=true
-      - REDIS_URL=redis://redis:6379
-    gpus: all
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu ]
     volumes:
       - ./src:/app
       - ./src/.env:/app/.env
@@ -64,8 +43,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_started
     restart: unless-stopped
     command: [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "4000", "--reload" ]
     networks:

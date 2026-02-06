@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-
+from core import logger
 from database import get_db
 from services import qdrant_service, llm_service
 
@@ -50,6 +50,11 @@ async def normal_retrieve(
         source_ids=source_ids,
         type="image"
     )
+    logger.info(
+        f"Image retrieved include:\n"
+        + "\n".join(f"- {image['content']}" for image in images)
+    )
+
     return_images = []
     if images:
         params["num_docs"] = len(images)
@@ -58,6 +63,11 @@ async def normal_retrieve(
         doc_indices = llm_service.get_chat_completion(task, params)["reranked_indices"]
         for i in doc_indices:
             image = images[i]
+
+            logger.info(
+                f"Image retrieved after rerank include:\n"
+                + "\n".join(f"- {image['content']}" for image in images)
+            )
             return_images.append({
                 "caption": image["content"],
                 "image_path": image["metadata"].get("image_path"),

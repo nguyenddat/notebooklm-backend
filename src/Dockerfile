@@ -1,42 +1,44 @@
-FROM nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04
+FROM python:3.12.3-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Ho_Chi_Minh
 
-# ---- System deps (stable, cache tốt)
-RUN ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
-    && apt-get update \
-    && apt-get install -y \
+# ---- System dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         tzdata \
-        software-properties-common \
         ffmpeg \
         netcat-openbsd \
-    && add-apt-repository ppa:deadsnakes/ppa \
-    && apt-get update \
-    && apt-get install -y \
-        python3.12 \
-        python3.12-dev \
-        python3.12-venv \
+        ca-certificates \
+        curl \
+        build-essential \
+        poppler-utils \
+        ghostscript \
+        qpdf \
+        # Cài đặt LibreOffice Headless
+        libreoffice \
+        libreoffice-writer \
+        libreoffice-java-common \
+        # Cài đặt font để hiển thị đúng tiếng Việt và ký tự đặc biệt
+        fonts-liberation \
+        fonts-dejavu \
+        fontconfig \
+    && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 \
-    && update-alternatives --set python3 /usr/bin/python3.12
-
-RUN python3.12 -m ensurepip --upgrade \
-    && python3.12 -m pip install --upgrade pip setuptools wheel
+# ---- Upgrade pip tools
+RUN python -m pip install --upgrade pip setuptools wheel
 
 WORKDIR /app
 COPY requirements.txt .
 
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 \
-    && python3 -m pip install onnxruntime-gpu \
-    && python3 -m pip install -r requirements.txt \
-    && python3 -m pip install python-multipart
+# ---- Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# ---- COPY source code sau cùng
+# ---- Copy source code
 COPY . .
 
 EXPOSE 8000

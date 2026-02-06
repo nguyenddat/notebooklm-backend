@@ -10,7 +10,8 @@ gemini_llm = ChatOpenAI(
     model_name="google/gemini-2.5-flash",
     openai_api_key=config.openrouter_api_key,
     openai_api_base="https://openrouter.ai/api/v1",
-    temperature=0
+    temperature=0,
+    max_retries=0
 )
 
 latex_ocr = LatexOCR()

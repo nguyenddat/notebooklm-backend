@@ -7,7 +7,6 @@ load_dotenv()
 class Config(BaseSettings):
     # directory
     base_dir: str = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
-    artifact_dir: str = os.path.join(base_dir, 'artifact')
     static_dir: str = os.path.join(base_dir, 'static')
     
     # database
@@ -33,6 +32,13 @@ class Config(BaseSettings):
     # retrieve config
     min_image_area: int = 500
 
+    min_width: int = 100
+    min_height: int = 100
+    max_width: int = 5000
+    max_height: int = 5000
+    
+    # version
+    source_version: str = "v2"
+    
 config = Config()
-os.makedirs(config.artifact_dir, exist_ok=True)
 os.makedirs(config.static_dir, exist_ok=True)

@@ -20,7 +20,6 @@ class CitationItem(BaseModel):
 
 class NotebookChatResponse(BaseModel):
     messages: List[MessageItem] = Field(
-        ...,
         description="Danh sách message theo đúng thứ tự xuất hiện, gồm text và image."
     )
     recommendations: List[str] = Field(
@@ -31,5 +30,7 @@ class NotebookChatResponse(BaseModel):
         default_factory=list,
         description="Danh sách nguồn trích dẫn trong tài liệu."
     )
+
+    summary: str = Field(description="Chủ đề của cuộc trò chuyện này ngắn gọn, súc tích bằng một vài từ.")
 
 parser = PydanticOutputParser(pydantic_object=NotebookChatResponse)
